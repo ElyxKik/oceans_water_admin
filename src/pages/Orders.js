@@ -382,14 +382,10 @@ const OrdersNew = () => {
   };
 
   // ---- Create order modal handlers ----
-  const [clients, setClients] = useState([]);
   const [products, setProducts] = useState([]);
-  const [loadingClients, setLoadingClients] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newOrder, setNewOrder] = useState({
-    client: '', // id client
-    manual_client: false,
     client_name: '',
     client_email: '',
     client_phone: '',
@@ -400,33 +396,26 @@ const OrdersNew = () => {
     notes: '',
   });
 
-  const fetchClientsAndProducts = async () => {
+  const fetchProducts = async () => {
     try {
-      setLoadingClients(true);
       setLoadingProducts(true);
-      const [clientsData, productsData] = await Promise.all([
-        clientService.getAllClients(1),
-        productService.getAllProducts(1),
-      ]);
-      setClients((clientsData.results || clientsData) || []);
+      const productsData = await productService.getAllProducts(1);
       setProducts((productsData.results || productsData) || []);
     } catch (e) {
-      console.error('Erreur chargement clients/produits', e);
+      console.error('Erreur chargement produits', e);
     } finally {
-      setLoadingClients(false);
       setLoadingProducts(false);
     }
   };
 
+  // Fonction pour gérer les changements dans les articles du formulaire d'édition
   const handleOpenCreateModal = async () => {
-    await fetchClientsAndProducts();
+    await fetchProducts();
     setIsCreateModalOpen(true);
   };
   const handleCloseCreateModal = () => {
     setIsCreateModalOpen(false);
     setNewOrder({
-      client: '',
-      manual_client: false,
       client_name: '',
       client_email: '',
       client_phone: '',
@@ -441,9 +430,7 @@ const OrdersNew = () => {
   const handleNewOrderField = (field, value) => {
     setNewOrder(prev => ({ ...prev, [field]: value }));
   };
-  const toggleManualClient = () => {
-    setNewOrder(prev => ({ ...prev, manual_client: !prev.manual_client, client: '' }));
-  };
+  // La fonction toggleManualClient a été supprimée car nous n'utilisons plus l'option de sélection de client
   const handleItemChange = (index, field, value) => {
     setNewOrder(prev => {
       const items = [...prev.items];
@@ -462,23 +449,84 @@ const OrdersNew = () => {
     e.preventDefault();
     setCreating(true);
     try {
-      // Construire payload backend
-      const payload = {
-        ...newOrder,
-        items: newOrder.items.filter(it => it.product && it.quantity > 0).map(it => ({ product: it.product, quantity: Number(it.quantity) })),
-      };
-      if (newOrder.manual_client) {
-        payload.client_name = newOrder.client_name;
-        payload.client_email = newOrder.client_email;
-        payload.client_phone = newOrder.client_phone;
+      // Vérifier que les champs obligatoires sont remplis
+      if (!newOrder.shipping_address) {
+        throw new Error('L\'adresse de livraison est obligatoire');
       }
+      if (!newOrder.shipping_phone) {
+        throw new Error('Le téléphone de livraison est obligatoire');
+      }
+      if (!newOrder.client_name) {
+        throw new Error('Le nom du client est obligatoire');
+      }
+      if (newOrder.items.length === 0 || !newOrder.items.some(item => item.product && item.quantity > 0)) {
+        throw new Error('Vous devez ajouter au moins un article à la commande');
+      }
+
+      // Construire payload backend avec les noms de champs corrects
+      const payload = {
+        // Mapper les champs du frontend vers les noms attendus par le backend
+        adresse_livraison: newOrder.shipping_address,
+        telephone_livraison: newOrder.shipping_phone,
+        notes: newOrder.notes || '',
+        mode_paiement: newOrder.payment_method || 'a_la_livraison',
+        nom_complet: newOrder.client_name,
+        email: newOrder.client_email || '',
+        
+        // Transformer les items en articles avec la structure attendue
+        articles: newOrder.items
+          .filter(it => it.product && it.quantity > 0)
+          .map(it => {
+            // Le backend s'attend à recevoir uniquement les champs définis dans ArticleCommandeCreateSerializer
+            // et produit doit être un ID numérique
+            return {
+              produit: parseInt(it.product), // Convertir en nombre
+              quantite: Number(it.quantity),
+              avec_consigne: true, // Valeur par défaut
+              bouteilles_echangees: 0 // Valeur par défaut
+            };
+          }),
+      };
+      
+      // Ajouter le téléphone dans les notes si nécessaire
+      if (newOrder.client_phone) {
+        payload.notes = `${payload.notes || ''} - Téléphone client: ${newOrder.client_phone}`.trim();
+      }
+      
+      console.log('Payload envoyé au backend:', payload);
       await orderService.createOrder(payload);
       alert('Commande créée avec succès');
       handleCloseCreateModal();
       fetchOrders();
     } catch (err) {
-      console.error('Erreur création commande', err);
-      alert('Erreur: ' + (err.response?.data?.detail || err.message));
+      console.error('Erreur création commande:', err);
+      console.error('Détails de l\'erreur:', err.response?.data);
+      
+      // Afficher un message d'erreur plus détaillé
+      let errorMessage = 'Erreur inconnue';
+      
+      if (err.response?.data) {
+        if (typeof err.response.data === 'string') {
+          errorMessage = err.response.data;
+        } else if (err.response.data.detail) {
+          errorMessage = err.response.data.detail;
+        } else {
+          // Formater les erreurs de validation
+          const errors = [];
+          Object.entries(err.response.data).forEach(([field, messages]) => {
+            if (Array.isArray(messages)) {
+              errors.push(`${field}: ${messages.join(', ')}`);
+            } else {
+              errors.push(`${field}: ${messages}`);
+            }
+          });
+          errorMessage = errors.join('\n');
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      alert('Erreur: ' + errorMessage);
     } finally {
       setCreating(false);
     }
@@ -518,10 +566,9 @@ const OrdersNew = () => {
                 <td style={styles.td}>{order.numero_commande || order.code || order.id}</td>
                 <td style={styles.td}>{formatDate(order.date_commande || order.created_at)}</td>
                 <td style={styles.td}>
-                  {order.client_nom ||
-                    (order.client && (order.client.full_name || order.client.username || order.client.email)) ||
-                    order.client_anonyme ||
-                    'Client'}
+                  {order.nom_complet || 
+                    (order.client && (order.client.full_name || order.client.username)) || 
+                    'Client Anonyme'}
                 </td>
                 <td style={styles.td}>{formatPrice(order.total_commande || order.montant_total || order.total)}</td>
                 <td style={styles.td}>
@@ -664,14 +711,14 @@ const OrdersNew = () => {
                 {/* Section informations principales */}
                 <div style={styles.detailSection}>
                   <h3>Détails de la commande</h3>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Numéro :</span>{' '}<span style={styles.detailValue}>{selectedOrder?.numero_commande || selectedOrder?.code || selectedOrder?.id}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Client :</span>{' '}<span style={styles.detailValue}>{selectedOrder?.client && (selectedOrder.client.full_name || selectedOrder.client.username || selectedOrder.client.email) || selectedOrder?.client_nom || selectedOrder?.client_name || '—'}</span></div>
-                  {selectedOrder?.client_anonyme && (
-                    <div style={styles.detailItem}><span style={styles.detailLabel}>Client anonyme :</span>{' '}<span style={styles.detailValue}>{selectedOrder.client_anonyme}</span></div>
-                  )}
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Statut :</span>{' '}<span style={{ ...styles.statusBadge, ...getStatusStyle(selectedOrder?.status) }}>{translateStatus(selectedOrder?.status)}</span></div>
+                  <div style={styles.detailItem}><span style={styles.detailLabel}>Nom :</span>{' '}<span style={styles.detailValue}>{selectedOrder?.client && (selectedOrder.client.full_name || selectedOrder.client.username) || selectedOrder?.nom_complet || selectedOrder?.client_name || '—'}</span></div>
+                  <div style={styles.detailItem}><span style={styles.detailLabel}>Email :</span>{' '}<span style={styles.detailValue}>{selectedOrder?.client && (selectedOrder.client.email || selectedOrder.client.username) || selectedOrder?.email_anonyme || '—'}</span></div>
                   <div style={styles.detailItem}><span style={styles.detailLabel}>Adresse de livraison :</span>{' '}<span style={styles.detailValue}>{selectedOrder?.shipping_address || selectedOrder?.adresse_livraison || '—'}</span></div>
                   <div style={styles.detailItem}><span style={styles.detailLabel}>Téléphone de livraison :</span>{' '}<span style={styles.detailValue}>{selectedOrder?.shipping_phone || selectedOrder?.telephone_livraison || selectedOrder?.phone_livraison || '—'}</span></div>
+                  <div style={styles.detailItem}><span style={styles.detailLabel}>Statut :</span>{' '}<span style={{ ...styles.statusBadge, ...getStatusStyle(selectedOrder?.status) }}>{translateStatus(selectedOrder?.status)}</span></div>
+                  {selectedOrder?.nom_complet && !selectedOrder?.client && (
+                    <div style={styles.detailItem}><span style={styles.detailLabel}>Client sans compte :</span>{' '}<span style={styles.detailValue}>{selectedOrder.nom_complet}</span></div>
+                  )}
                   {selectedOrder?.payment_method && (
                     <div style={styles.detailItem}><span style={styles.detailLabel}>Mode de paiement :</span>{' '}<span style={styles.detailValue}>{translatePaymentMethod(selectedOrder.payment_method)}</span></div>
                   )}
@@ -733,18 +780,48 @@ const OrdersNew = () => {
                 <div style={styles.detailSection}>
                   <h3>Informations client</h3>
                   <div style={styles.detailItem}>
-                    <span style={styles.detailLabel}>Client :</span>{' '}
+                    <span style={styles.detailLabel}>Nom :</span>{' '}
                     <span style={styles.detailValue}>
-                      {selectedOrder?.client && (selectedOrder.client.full_name || selectedOrder.client.username || selectedOrder.client.email) || 
-                       selectedOrder?.client_nom || selectedOrder?.client_name || '—'}
+                      {selectedOrder?.client && (selectedOrder.client.full_name || selectedOrder.client.username) || 
+                       selectedOrder?.nom_complet || selectedOrder?.client_nom || selectedOrder?.client_name || '—'}
                     </span>
                   </div>
-                  {selectedOrder?.client_anonyme && (
+                  <div style={styles.detailItem}>
+                    <span style={styles.detailLabel}>Email :</span>{' '}
+                    <span style={styles.detailValue}>
+                      {selectedOrder?.client && selectedOrder.client.email || selectedOrder?.email_anonyme || '—'}
+                    </span>
+                  </div>
+                  {selectedOrder?.nom_complet && !selectedOrder?.client && (
                     <div style={styles.detailItem}>
-                      <span style={styles.detailLabel}>Client anonyme :</span>{' '}
-                      <span style={styles.detailValue}>{selectedOrder.client_anonyme}</span>
+                      <span style={styles.detailLabel}>Client sans compte :</span>{' '}
+                      <span style={styles.detailValue}>{selectedOrder.nom_complet}</span>
                     </div>
                   )}
+                </div>
+                
+                {/* Adresse & téléphone livraison */}
+                <div style={{...styles.formGroup, width: '100%'}}>
+                  <label style={{...styles.label, fontSize: '16px', marginBottom: '8px'}}>Adresse de livraison</label>
+                  <input
+                    type="text"
+                    value={editFormData?.shipping_address || ''}
+                    onChange={(e) => handleEditFormChange('shipping_address', e.target.value)}
+                    required
+                    style={{...styles.searchInput, width: '100%', padding: '12px', fontSize: '16px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                  />
+                </div>
+                
+                {/* Téléphone de livraison */}
+                <div style={{...styles.formGroup, width: '100%'}}>
+                  <label style={{...styles.label, fontSize: '16px', marginBottom: '8px'}}>Téléphone de livraison</label>
+                  <input
+                    type="text"
+                    value={editFormData?.shipping_phone || ''}
+                    onChange={(e) => handleEditFormChange('shipping_phone', e.target.value)}
+                    required
+                    style={{...styles.searchInput, width: '100%', padding: '12px', fontSize: '16px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                  />
                 </div>
                 
                 {/* Statut de la commande */}
@@ -763,18 +840,6 @@ const OrdersNew = () => {
                     <option value="livree">Livrée</option>
                     <option value="annulee">Annulée</option>
                   </select>
-                </div>
-                
-                {/* Adresse & téléphone livraison */}
-                <div style={{...styles.formGroup, width: '100%'}}>
-                  <label style={{...styles.label, fontSize: '16px', marginBottom: '8px'}}>Adresse de livraison</label>
-                  <input
-                    type="text"
-                    value={editFormData?.shipping_address || ''}
-                    onChange={(e) => handleEditFormChange('shipping_address', e.target.value)}
-                    required
-                    style={{...styles.searchInput, width: '100%', padding: '12px', fontSize: '16px', borderRadius: '4px', border: '1px solid #d1d5db'}}
-                  />
                 </div>
                 
                 <div style={{...styles.formGroup, width: '100%'}}>
@@ -875,58 +940,37 @@ const OrdersNew = () => {
           <div style={styles.modalContent}>
             <h2>Nouvelle commande</h2>
 
-            {loadingClients || loadingProducts ? (
-              <p>Chargement des données...</p>
+            {loadingProducts ? (
+              <p>Chargement des produits...</p>
             ) : (
               <form onSubmit={handleCreateOrder} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {/* Choix du client */}
-                <div>
-                  <label>
-                    <input type="checkbox" checked={newOrder.manual_client} onChange={toggleManualClient} />
-                    Client manuel
-                  </label>
+                {/* Informations du client */}
+                <div style={{marginBottom: '10px'}}>
+                  <h3 style={{marginBottom: '10px', fontSize: '16px', fontWeight: 'bold'}}>Informations du client</h3>
                 </div>
-                {!newOrder.manual_client ? (
-                  <select
-                    value={newOrder.client}
-                    onChange={e => handleNewOrderField('client', e.target.value)}
-                    required
-                    style={styles.select}
-                  >
-                    <option value="">-- Sélectionner un client --</option>
-                    {clients.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.first_name} {c.last_name} - {c.email}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      placeholder="Nom complet"
-                      value={newOrder.client_name}
-                      onChange={e => handleNewOrderField('client_name', e.target.value)}
-                      required
-                      style={styles.searchInput}
-                    />
-                    <input
-                      type="email"
-                      placeholder="Email"
-                      value={newOrder.client_email}
-                      onChange={e => handleNewOrderField('client_email', e.target.value)}
-                      style={styles.searchInput}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Téléphone"
-                      value={newOrder.client_phone}
-                      onChange={e => handleNewOrderField('client_phone', e.target.value)}
-                      required
-                      style={styles.searchInput}
-                    />
-                  </>
-                )}
+                <input
+                  type="text"
+                  placeholder="Nom complet"
+                  value={newOrder.client_name}
+                  onChange={e => handleNewOrderField('client_name', e.target.value)}
+                  required
+                  style={styles.searchInput}
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={newOrder.client_email}
+                  onChange={e => handleNewOrderField('client_email', e.target.value)}
+                  style={styles.searchInput}
+                />
+                <input
+                  type="text"
+                  placeholder="Téléphone"
+                  value={newOrder.client_phone}
+                  onChange={e => handleNewOrderField('client_phone', e.target.value)}
+                  required
+                  style={styles.searchInput}
+                />
 
                 {/* Adresse & téléphone livraison */}
                 <input
@@ -958,11 +1002,13 @@ const OrdersNew = () => {
                         style={styles.select}
                       >
                         <option value="">Produit</option>
-                        {products.map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.name || p.nom}
-                          </option>
-                        ))}
+                        {products
+                          .filter(p => (p.disponible !== false) && (p.stock === undefined || p.stock > 0))
+                          .map(p => (
+                            <option key={p.id} value={p.id}>
+                              {(p.nom || p.name)}{p.stock !== undefined ? ` (stock: ${p.stock})` : ''}
+                            </option>
+                          ))}
                       </select>
                       <input
                         type="number"

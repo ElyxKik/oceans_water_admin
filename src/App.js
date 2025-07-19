@@ -31,9 +31,9 @@ function App() {
             
             {/* Routes protégées avec différents niveaux d'accès */}
             <Route element={<Layout />}>
-              {/* Tableau de bord - accessible à tous les utilisateurs authentifiés */}
+              {/* Tableau de bord - accessible uniquement aux fondateurs et administrateurs */}
               <Route index element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole={ROLES.ADMINISTRATEUR}>
                   <Dashboard />
                 </ProtectedRoute>
               } />

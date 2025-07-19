@@ -4,105 +4,80 @@ const clientService = {
   // Récupérer tous les clients avec pagination et filtres
   getAllClients: async (page = 1, filters = {}) => {
     try {
+      // Paramètres de requête
       const params = { page, ...filters };
       
-      // Étape 1: Obtenir le lien vers les utilisateurs
+      // Essayer d'abord avec le chemin direct vers les utilisateurs
       try {
-        const rootResponse = await api.get('/v1/accounts/', { params: { page } });
-        const rootData = rootResponse.data;
-        console.log('Réponse racine API:', rootData);
+        console.log('Tentative d\'accès direct aux utilisateurs');
+        const response = await api.get('/accounts/management/', { params });
+        const data = response.data;
         
-        // Si nous avons un lien HATEOAS vers les utilisateurs
-        if (rootData && rootData.users && typeof rootData.users === 'string') {
-          console.log('Lien HATEOAS détecté:', rootData.users);
-          
-          // Étape 2: Suivre le lien HATEOAS pour obtenir les utilisateurs
-          try {
-            // Extraire le chemin relatif de l'URL complète
-            const usersPath = rootData.users.replace(api.defaults.baseURL, '');
-            console.log('Chemin relatif des utilisateurs:', usersPath);
-            
-            // Appliquer les filtres de recherche à la requête utilisateurs
-            const usersParams = { page, ...filters };
-            if (filters.search) {
-              usersParams.search = filters.search;
-              console.log('Paramètre de recherche appliqué:', usersParams.search);
-            }
-            
-            const usersResponse = await api.get(usersPath, { params: usersParams });
-            const usersData = usersResponse.data;
-            console.log('Données utilisateurs:', usersData);
-            
-            // Normaliser la réponse
-            if (Array.isArray(usersData)) {
-              return { results: usersData, count: usersData.length };
-            } else if (usersData && usersData.results && Array.isArray(usersData.results)) {
-              return usersData;
-            } else {
-              console.warn('Format de données utilisateurs inattendu:', usersData);
-              return { results: [], count: 0 };
-            }
-          } catch (usersError) {
-            console.error('Erreur lors de la récupération des utilisateurs via HATEOAS:', usersError);
-            return { results: [], count: 0 };
-          }
-        }
-        
-        // Traitement standard si ce n'est pas un format HATEOAS
-        if (Array.isArray(rootData)) {
-          return { results: rootData, count: rootData.length };
-        } else if (rootData && rootData.results && Array.isArray(rootData.results)) {
-          return rootData;
+        // Normaliser la réponse
+        if (Array.isArray(data)) {
+          console.log('Données reçues sous forme de tableau');
+          return { results: data, count: data.length };
+        } else if (data && data.results && Array.isArray(data.results)) {
+          console.log('Données reçues avec pagination');
+          return data;
         } else {
-          console.warn('Format de réponse inattendu (non HATEOAS):', rootData);
+          console.log('Format de données inattendu, tentative d\'adaptation');
+          // Essayer d'extraire les données utilisateur
+          if (data && typeof data === 'object') {
+            // Si c'est un seul utilisateur
+            if (data.id && (data.username || data.email)) {
+              return { results: [data], count: 1 };
+            }
+            
+            // Chercher des tableaux dans l'objet qui pourraient contenir des utilisateurs
+            const possibleArrays = Object.values(data).filter(val => Array.isArray(val));
+            if (possibleArrays.length > 0) {
+              return { results: possibleArrays[0], count: possibleArrays[0].length };
+            }
+          }
+          
+          console.warn('Impossible d\'extraire des données utilisateur');
           return { results: [], count: 0 };
         }
-      } catch (rootError) {
-        console.log('Erreur avec /v1/accounts/, tentative avec chemin alternatif');
+      } catch (error) {
+        console.log('Erreur avec le chemin direct, tentative avec chemin alternatif', error);
         
-        // Essayer avec le chemin sans v1
+        // Essayer avec un autre chemin
         try {
-          const response = await api.get('/accounts/', { params: { page } });
+          const response = await api.get('/accounts/users/', { params });
           const data = response.data;
           
-          // Même logique HATEOAS pour le chemin alternatif
-          if (data && data.users && typeof data.users === 'string') {
-            const usersPath = data.users.replace(api.defaults.baseURL, '');
-            
-            // Appliquer les filtres de recherche à la requête utilisateurs
-            const usersParams = { page, ...filters };
-            if (filters.search) {
-              usersParams.search = filters.search;
-              console.log('Paramètre de recherche appliqué (alternatif):', usersParams.search);
-            }
-            
-            const usersResponse = await api.get(usersPath, { params: usersParams });
-            const usersData = usersResponse.data;
-            
-            if (Array.isArray(usersData)) {
-              return { results: usersData, count: usersData.length };
-            } else if (usersData && usersData.results && Array.isArray(usersData.results)) {
-              return usersData;
-            }
-          }
-          
-          // Traitement standard
           if (Array.isArray(data)) {
             return { results: data, count: data.length };
           } else if (data && data.results && Array.isArray(data.results)) {
             return data;
           } else {
-            console.warn('Format de réponse alternatif inattendu:', data);
+            console.warn('Format de réponse inattendu sur le chemin alternatif');
             return { results: [], count: 0 };
           }
-        } catch (altError) {
-          console.error('Échec de toutes les tentatives de récupération des clients:', altError);
-          return { results: [], count: 0 };
+        } catch (alternativeError) {
+          // Dernier recours: essayer avec l'API v1
+          try {
+            const response = await api.get('/v1/accounts/users/', { params });
+            const data = response.data;
+            
+            if (Array.isArray(data)) {
+              return { results: data, count: data.length };
+            } else if (data && data.results && Array.isArray(data.results)) {
+              return data;
+            } else {
+              console.warn('Aucun chemin n\'a fonctionné pour récupérer les utilisateurs');
+              return { results: [], count: 0 };
+            }
+          } catch (finalError) {
+            console.error('Toutes les tentatives ont échoué:', finalError);
+            return { results: [], count: 0 };
+          }
         }
       }
     } catch (error) {
       console.error('Erreur lors de la récupération des clients:', error);
-      throw error;
+      return { results: [], count: 0 };
     }
   },
 
@@ -120,7 +95,7 @@ const clientService = {
   // Mettre à jour un client
   updateClient: async (id, clientData) => {
     try {
-      const response = await api.patch(`/v1/accounts/${id}/`, clientData);
+      const response = await api.patch(`/v1/accounts/management/${id}/`, clientData);
       return response.data;
     } catch (error) {
       console.error(`Erreur lors de la mise à jour du client ${id}:`, error);
@@ -142,7 +117,7 @@ const clientService = {
   // Désactiver un compte client
   deactivateClient: async (id) => {
     try {
-      const response = await api.patch(`/v1/accounts/${id}/`, { is_active: false });
+      const response = await api.patch(`/v1/accounts/management/${id}/`, { is_active: false });
       return response.data;
     } catch (error) {
       console.error(`Erreur lors de la désactivation du client ${id}:`, error);
@@ -153,7 +128,7 @@ const clientService = {
   // Réactiver un compte client
   activateClient: async (id) => {
     try {
-      const response = await api.patch(`/v1/accounts/${id}/`, { is_active: true });
+      const response = await api.patch(`/v1/accounts/management/${id}/`, { is_active: true });
       return response.data;
     } catch (error) {
       console.error(`Erreur lors de la réactivation du client ${id}:`, error);

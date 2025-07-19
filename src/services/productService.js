@@ -75,7 +75,7 @@ const productService = {
         return response.data;
       } else {
         // Sinon, on envoie les données JSON normalement
-        const response = await api.put(`/v1/products/produits/${id}/`, productData);
+        const response = await api.patch(`/v1/products/produits/${id}/`, productData);
         return response.data;
       }
     } catch (error) {
