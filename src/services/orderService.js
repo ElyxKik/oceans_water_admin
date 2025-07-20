@@ -47,9 +47,6 @@ const orderService = {
         const map = {
           pending: 'en_attente',
           validated: 'confirmee',
-          preparing: 'en_preparation',
-          ready: 'prete_livraison',
-          delivering: 'en_livraison',
           delivered: 'livree',
           cancelled: 'annulee'
         };

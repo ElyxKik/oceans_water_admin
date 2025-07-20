@@ -13,7 +13,7 @@ const activityLogService = {
         }
       });
       
-      const response = await api.get(`/v1/activity/logs/?${params.toString()}`);
+      const response = await api.get(`/activity-logs/logs/?${params.toString()}`);
       return response.data;
     } catch (error) {
       console.error('Erreur lors de la récupération des logs d\'activité:', error);
@@ -24,7 +24,7 @@ const activityLogService = {
   // Récupérer un log d'activité spécifique
   getLog: async (id) => {
     try {
-      const response = await api.get(`/v1/activity/logs/${id}/`);
+      const response = await api.get(`/activity-logs/logs/${id}/`);
       return response.data;
     } catch (error) {
       console.error(`Erreur lors de la récupération du log d'activité #${id}:`, error);
@@ -35,7 +35,7 @@ const activityLogService = {
   // Récupérer les statistiques des logs d'activité
   getStatistics: async () => {
     try {
-      const response = await api.get('/v1/activity/logs/statistics/');
+      const response = await api.get('/activity-logs/logs/statistics/');
       return response.data;
     } catch (error) {
       console.error('Erreur lors de la récupération des statistiques:', error);
@@ -46,7 +46,7 @@ const activityLogService = {
   // Récupérer la liste des modules disponibles
   getModules: async () => {
     try {
-      const response = await api.get('/v1/activity/logs/modules/');
+      const response = await api.get('/activity-logs/logs/modules/');
       return response.data;
     } catch (error) {
       console.error('Erreur lors de la récupération des modules:', error);
@@ -57,7 +57,7 @@ const activityLogService = {
   // Récupérer la liste des types d'action disponibles
   getActionTypes: async () => {
     try {
-      const response = await api.get('/v1/activity/logs/action_types/');
+      const response = await api.get('/activity-logs/logs/action-types/');
       return response.data;
     } catch (error) {
       console.error('Erreur lors de la récupération des types d\'action:', error);
@@ -68,7 +68,7 @@ const activityLogService = {
   // Récupérer la liste des niveaux de sévérité
   getSeverities: async () => {
     try {
-      const response = await api.get('/v1/activity/logs/severities/');
+      const response = await api.get('/activity-logs/logs/severities/');
       return response.data;
     } catch (error) {
       console.error('Erreur lors de la récupération des niveaux de sévérité:', error);
@@ -79,7 +79,7 @@ const activityLogService = {
   // Supprimer des logs d'activité (réservé aux fondateurs)
   clearLogs: async (data) => {
     try {
-      const response = await api.post('/v1/activity/logs/clear_logs/', data);
+      const response = await api.post('/activity-logs/logs/clear/', data);
       return response.data;
     } catch (error) {
       console.error('Erreur lors de la suppression des logs:', error);

@@ -42,17 +42,22 @@ const translatePaymentMethod = method => {
 
 const translateStatus = status => {
   switch (status) {
-    case 'pending':
     case 'en_attente':
       return 'En attente';
-    case 'validated':
     case 'confirmee':
-      return 'Validée';
-    case 'delivered':
+      return 'Confirmée';
     case 'livree':
       return 'Livrée';
-    case 'cancelled':
     case 'annulee':
+      return 'Annulée';
+    // Garder la compatibilité avec les anciens statuts si nécessaire
+    case 'pending':
+      return 'En attente';
+    case 'validated':
+      return 'Confirmée';
+    case 'delivered':
+      return 'Livrée';
+    case 'cancelled':
       return 'Annulée';
     default:
       return status;
@@ -61,17 +66,22 @@ const translateStatus = status => {
 
 const getStatusStyle = status => {
   switch (status) {
-    case 'pending':
     case 'en_attente':
       return { backgroundColor: '#fef3c7', color: '#92400e' };
-    case 'validated':
     case 'confirmee':
       return { backgroundColor: '#dcfce7', color: '#166534' };
-    case 'delivered':
     case 'livree':
       return { backgroundColor: '#dbeafe', color: '#1e40af' };
-    case 'cancelled':
     case 'annulee':
+      return { backgroundColor: '#fee2e2', color: '#b91c1c' };
+    // Garder la compatibilité avec les anciens statuts si nécessaire
+    case 'pending':
+      return { backgroundColor: '#fef3c7', color: '#92400e' };
+    case 'validated':
+      return { backgroundColor: '#dcfce7', color: '#166534' };
+    case 'delivered':
+      return { backgroundColor: '#dbeafe', color: '#1e40af' };
+    case 'cancelled':
       return { backgroundColor: '#fee2e2', color: '#b91c1c' };
     default:
       return { backgroundColor: '#e5e7eb', color: '#4b5563' };
@@ -122,12 +132,20 @@ const OrdersNew = () => {
     try {
       const filters = {};
       if (searchQuery) filters.search = searchQuery;
-      if (statusFilter && statusFilter !== 'all') filters.status = statusFilter;
+      if (statusFilter && statusFilter !== 'all') filters.statut = statusFilter;
 
+      // Définir la taille de page alignée avec le backend (20)
+      const pageSize = 20;
+      
+      // Ajouter page_size aux filtres
+      filters.page_size = pageSize;
+      
       const data = await orderService.getAllOrders(currentPage, filters);
       const list = data.results || data;
       setOrders(list.map(o => ({ ...o, status: o.status || o.statut })));
-      setTotalPages(Math.max(1, Math.ceil((data.count || list.length) / 10)));
+      
+      // Utiliser pageSize au lieu de la valeur codée en dur
+      setTotalPages(Math.max(1, Math.ceil((data.count || list.length) / pageSize)));
     } catch (err) {
       console.error('Erreur lors du chargement des commandes:', err);
       setError('Impossible de charger les commandes. Veuillez réessayer.');
@@ -298,7 +316,7 @@ const OrdersNew = () => {
     
     setLoading(true);
     try {
-      await orderService.updateOrderStatus(orderId, 'cancelled');
+      await orderService.updateOrderStatus(orderId, 'annulee');
       // Rafraîchir la liste des commandes
       fetchOrders();
       alert('La commande a été annulée avec succès.');
@@ -584,16 +602,16 @@ const OrdersNew = () => {
                     <button 
                        style={styles.editButton} 
                       onClick={() => handleEditOrder(order)}
-                      disabled={order.status === 'cancelled' || order.status === 'annulee'}
+                      disabled={order.status === 'annulee'}
                     >
                       Modifier
                     </button>
-                    {(order.status === 'pending' || order.status === 'en_attente' || order.status === 'validated' || order.status === 'validee') && (
+                    {(order.status === 'en_attente' || order.status === 'confirmee') && (
                       <button style={styles.dangerButton} onClick={() => handleCancelOrder(order.id)}>
                         Annuler
                       </button>
                     )}
-                    {(order.status === 'validated' || order.status === 'validee' || order.status === 'confirmee') && (
+                    {(order.status === 'confirmee') && (
                       <button style={styles.assignButton} onClick={() => handleAssignDelivery(order)}>
                         Assigner
                       </button>
@@ -672,10 +690,10 @@ const OrdersNew = () => {
           style={styles.select}
         >
           <option value="all">Tous les statuts</option>
-          <option value="pending">En attente</option>
-          <option value="validated">Validée</option>
-          <option value="delivered">Livrée</option>
-          <option value="cancelled">Annulée</option>
+          <option value="en_attente">En attente</option>
+          <option value="confirmee">Confirmée</option>
+          <option value="livree">Livrée</option>
+          <option value="annulee">Annulée</option>
         </select>
 
         {/* Create order button */}
@@ -834,9 +852,6 @@ const OrdersNew = () => {
                   >
                     <option value="en_attente">En attente</option>
                     <option value="confirmee">Confirmée</option>
-                    <option value="en_preparation">En préparation</option>
-                    <option value="prete_livraison">Prête pour livraison</option>
-                    <option value="en_livraison">En livraison</option>
                     <option value="livree">Livrée</option>
                     <option value="annulee">Annulée</option>
                   </select>
@@ -1291,7 +1306,7 @@ const styles = {
   pageButtonActive: {
     backgroundColor: '#2563eb',
     color: '#fff',
-    borderColor: '#2563eb',
+    border: '1px solid #2563eb',
   },
 
   /* ---- Modal detail ---- */
