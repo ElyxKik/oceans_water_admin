@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
+import LivreurRedirect from "./components/LivreurRedirect";
 import Dashboard from "./pages/Dashboard";
 import Orders from "./pages/Orders";
 import Products from "./pages/Products";
@@ -8,9 +9,11 @@ import Brands from "./pages/Brands";
 import Clients from "./pages/Clients";
 import Reviews from "./pages/Reviews";
 import Messages from "./pages/Messages";
-import PendingDeliveries from "./pages/PendingDeliveries";
+import MesLivraisons from "./pages/MesLivraisons";
+import Livraisons from "./pages/Livraisons";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
+import Notifications from "./pages/Notifications";
 import Login from "./pages/Login";
 import AccessDenied from "./pages/AccessDenied";
 import ActivityLogs from "./pages/ActivityLogs";
@@ -18,23 +21,27 @@ import UserManagement from "./pages/UserManagement";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 import { RoleProvider, ROLES, PERMISSIONS } from "./contexts/RoleContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
 import "./index.css";
 
 function App() {
   return (
     <AuthProvider>
       <RoleProvider>
-        <BrowserRouter>
+        <NotificationProvider>
+          <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/acces-refuse" element={<AccessDenied />} />
             
             {/* Routes protégées avec différents niveaux d'accès */}
             <Route element={<Layout />}>
-              {/* Tableau de bord - accessible uniquement aux fondateurs et administrateurs */}
+              {/* Tableau de bord - accessible uniquement aux fondateurs et administrateurs, les livreurs sont redirigés */}
               <Route index element={
-                <ProtectedRoute requiredRole={ROLES.ADMINISTRATEUR}>
-                  <Dashboard />
+                <ProtectedRoute>
+                  <LivreurRedirect>
+                    <Dashboard />
+                  </LivreurRedirect>
                 </ProtectedRoute>
               } />
               
@@ -88,12 +95,19 @@ function App() {
               } />
               
               {/* Livraisons en attente - livreurs */}
-              <Route path="livraisons-attente" element={
+              <Route path="mes-livraisons" element={
                 <ProtectedRoute requiredRole={ROLES.LIVREUR}>
-                  <PendingDeliveries />
+                  <MesLivraisons />
                 </ProtectedRoute>
               } />
-
+              
+              {/* Livraisons - administrateurs et fondateurs */}
+              <Route path="livraisons" element={
+                <ProtectedRoute requiredRole={[ROLES.ADMINISTRATEUR, ROLES.FONDATEUR]}>
+                  <Livraisons />
+                </ProtectedRoute>
+              } />
+              
               {/* Messages - accessible aux managers et supérieurs */}
               <Route path="messages" element={
                 <ProtectedRoute requiredRole={ROLES.MANAGER}>
@@ -105,6 +119,13 @@ function App() {
               <Route path="profil" element={
                 <ProtectedRoute>
                   <Profile />
+                </ProtectedRoute>
+              } />
+
+              {/* Notifications - accessible à tous les utilisateurs authentifiés */}
+              <Route path="notifications" element={
+                <ProtectedRoute>
+                  <Notifications />
                 </ProtectedRoute>
               } />
 
@@ -123,7 +144,8 @@ function App() {
               } />
             </Route>
           </Routes>
-        </BrowserRouter>
+          </BrowserRouter>
+        </NotificationProvider>
       </RoleProvider>
     </AuthProvider>
   );

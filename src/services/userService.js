@@ -57,7 +57,15 @@ const userService = {
    */
   resetPassword: (id, new_password) => {
     return api.post(`${API_URL}${id}/set-password/`, { new_password });
-  }
+  },
+  /**
+   * Récupère la liste des utilisateurs avec le rôle livreur.
+   * @param {object} params - Paramètres optionnels (pagination, etc.)
+   * @returns {Promise<AxiosResponse<any>>}
+   */
+  getDeliveryUsers: (params = {}) => {
+    return api.get(`${API_URL}?role=livreur`, { params });
+  },
 };
 
 export default userService;

@@ -247,12 +247,14 @@ const UserManagement = () => {
     username: '',
     email: '',
     password: '',
+    password_confirm: '',
     role: 'livreur', // Rôle par défaut
   });
   
-  // État pour le modal d'édition (à implémenter plus tard)
+  // États pour le modal d'édition
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('email'); // Onglet actif par défaut
   
   // Fonction pour ouvrir le modal de création
   const openCreateModal = () => {
@@ -263,7 +265,7 @@ const UserManagement = () => {
   const closeCreateModal = () => {
     setIsCreateModalOpen(false);
     // Réinitialiser le formulaire
-    setNewUser({ username: '', email: '', password: '', role: 'livreur' });
+    setNewUser({ username: '', email: '', password: '', password_confirm: '', role: 'livreur' });
   };
 
   // Liste des rôles administratifs (excluant le rôle 'client')
@@ -375,19 +377,167 @@ const UserManagement = () => {
   };
 
   const handleEditUser = (user) => {
-    setEditingUser(user);
+    // Log pour déboguer la structure de l'objet utilisateur
+    console.log('User object:', user);
+    
+    // Déterminer l'ID correct (id ou pk)
+    const userId = user.id || user.pk;
+    
+    setEditingUser({
+      ...user,
+      id: userId, // S'assurer que l'ID est correctement défini
+      password: '',
+      password_confirm: ''
+    });
     setIsEditModalOpen(true);
-    // À implémenter plus tard
+  };
+  
+  // Fonction pour fermer le modal d'édition
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingUser(null);
+    setActiveTab('email'); // Réinitialiser l'onglet actif
+  };
+  
+  // Fonction pour gérer les changements dans le formulaire d'édition
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditingUser({ ...editingUser, [name]: value });
+  };
+  
+  // Fonction pour mettre à jour l'email d'un utilisateur
+  const handleUpdateEmail = async (e) => {
+    e.preventDefault();
+    try {
+      // Déterminer l'ID correct (id ou pk)
+      const userId = editingUser.id || editingUser.pk;
+      
+      if (!userId) {
+        console.error('ID utilisateur non défini:', editingUser);
+        alert('Erreur: Impossible de modifier l\'email car l\'ID utilisateur est manquant.');
+        return;
+      }
+      
+      const updateData = { email: editingUser.email };
+      console.log('Updating user email with ID:', userId, 'and data:', updateData);
+      
+      const response = await userService.updateUser(userId, updateData);
+      
+      // Mettre à jour la liste des utilisateurs
+      updateUserInList(userId, response.data);
+      
+      // Fermer le modal et réinitialiser le formulaire
+      closeEditModal();
+      alert('Email modifié avec succès !');
+    } catch (err) {
+      setError('Erreur lors de la modification de l\'email.');
+      console.error(err);
+    }
+  };
+  
+  // Fonction pour mettre à jour le mot de passe d'un utilisateur
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    try {
+      // Vérifier que les mots de passe correspondent
+      if (!editingUser.password) {
+        alert('Veuillez entrer un nouveau mot de passe.');
+        return;
+      }
+      
+      if (editingUser.password !== editingUser.password_confirm) {
+        alert('Les mots de passe ne correspondent pas.');
+        return;
+      }
+      
+      // Déterminer l'ID correct (id ou pk)
+      const userId = editingUser.id || editingUser.pk;
+      
+      if (!userId) {
+        console.error('ID utilisateur non défini:', editingUser);
+        alert('Erreur: Impossible de modifier le mot de passe car l\'ID utilisateur est manquant.');
+        return;
+      }
+      
+      const updateData = { password: editingUser.password };
+      console.log('Updating user password with ID:', userId);
+      
+      const response = await userService.updateUser(userId, updateData);
+      
+      // Mettre à jour la liste des utilisateurs
+      updateUserInList(userId, response.data);
+      
+      // Fermer le modal et réinitialiser le formulaire
+      closeEditModal();
+      alert('Mot de passe modifié avec succès !');
+    } catch (err) {
+      setError('Erreur lors de la modification du mot de passe.');
+      console.error(err);
+    }
+  };
+  
+  // Fonction pour mettre à jour le rôle d'un utilisateur
+  const handleUpdateRole = async (e) => {
+    e.preventDefault();
+    try {
+      // Déterminer l'ID correct (id ou pk)
+      const userId = editingUser.id || editingUser.pk;
+      
+      if (!userId) {
+        console.error('ID utilisateur non défini:', editingUser);
+        alert('Erreur: Impossible de modifier le rôle car l\'ID utilisateur est manquant.');
+        return;
+      }
+      
+      console.log('Updating user role with ID:', userId, 'and role:', editingUser.role);
+      
+      // Utiliser la méthode spécifique pour mettre à jour le rôle
+      const response = await userService.updateRole(userId, editingUser.role);
+      
+      // Mettre à jour la liste des utilisateurs
+      updateUserInList(userId, response.data);
+      
+      // Fermer le modal et réinitialiser le formulaire
+      closeEditModal();
+      alert('Rôle modifié avec succès !');
+    } catch (err) {
+      setError('Erreur lors de la modification du rôle.');
+      console.error(err);
+    }
+  };
+  
+  // Fonction utilitaire pour mettre à jour un utilisateur dans la liste
+  const updateUserInList = (userId, updatedUser) => {
+    setUsers(users.map(user => {
+      const currentId = user.id || user.pk;
+      return currentId === userId ? updatedUser : user;
+    }));
   };
 
-  const handleDeleteUser = async (userId) => {
+  const handleDeleteUser = async (user) => {
+    // Déterminer l'ID correct (id ou pk)
+    const userId = user.id || user.pk;
+    
+    if (!userId) {
+      console.error('ID utilisateur non défini:', user);
+      alert('Erreur: Impossible de supprimer l\'utilisateur car son ID est manquant.');
+      return;
+    }
+    
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) {
       try {
+        console.log('Deleting user with ID:', userId);
         await userService.deleteUser(userId);
-        setUsers(users.filter(user => user.id !== userId));
+        
+        // Mettre à jour la liste des utilisateurs
+        setUsers(users.filter(u => {
+          const currentId = u.id || u.pk;
+          return currentId !== userId;
+        }));
+        
         alert('Utilisateur supprimé avec succès !');
       } catch (err) {
-        setError('Erreur lors de la suppression de l’utilisateur.');
+        setError('Erreur lors de la suppression de l\'utilisateur.');
         console.error(err);
       }
     }
@@ -468,6 +618,17 @@ const UserManagement = () => {
                 />
               </div>
               <div style={styles.formGroup}>
+                <label style={styles.label}>Confirmer le mot de passe:</label>
+                <input 
+                  type="password" 
+                  name="password_confirm" 
+                  value={newUser.password_confirm} 
+                  onChange={handleInputChange} 
+                  style={styles.input}
+                  required 
+                />
+              </div>
+              <div style={styles.formGroup}>
                 <label style={styles.label}>Rôle:</label>
                 <select 
                   name="role" 
@@ -482,6 +643,141 @@ const UserManagement = () => {
               </div>
               <button type="submit" style={styles.submitButton}>Créer l'utilisateur</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'édition d'utilisateur */}
+      {isEditModalOpen && editingUser && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Modifier l'utilisateur: {editingUser.username}</h3>
+              <button onClick={closeEditModal} style={styles.closeButton}>&times;</button>
+            </div>
+            
+            {/* Informations utilisateur en lecture seule */}
+            <div style={{marginBottom: '20px', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '5px'}}>
+              <p style={{margin: '5px 0'}}><strong>Nom d'utilisateur:</strong> {editingUser.username}</p>
+              <p style={{margin: '5px 0'}}><strong>Email actuel:</strong> {editingUser.email}</p>
+              <p style={{margin: '5px 0'}}><strong>Rôle actuel:</strong> <span style={getRoleBadgeStyle(editingUser.role)}>{editingUser.role?.replace('_', ' ')}</span></p>
+            </div>
+            
+            {/* Onglets pour les différentes sections */}
+            <div style={{display: 'flex', borderBottom: '1px solid #ddd', marginBottom: '15px'}}>
+              <button 
+                onClick={() => setActiveTab('email')} 
+                style={{
+                  padding: '10px 15px',
+                  backgroundColor: activeTab === 'email' ? '#3498db' : '#f1f1f1',
+                  color: activeTab === 'email' ? 'white' : '#333',
+                  border: 'none',
+                  borderTopLeftRadius: '5px',
+                  borderTopRightRadius: '5px',
+                  cursor: 'pointer',
+                  marginRight: '5px'
+                }}
+              >
+                Modifier Email
+              </button>
+              <button 
+                onClick={() => setActiveTab('password')} 
+                style={{
+                  padding: '10px 15px',
+                  backgroundColor: activeTab === 'password' ? '#3498db' : '#f1f1f1',
+                  color: activeTab === 'password' ? 'white' : '#333',
+                  border: 'none',
+                  borderTopLeftRadius: '5px',
+                  borderTopRightRadius: '5px',
+                  cursor: 'pointer',
+                  marginRight: '5px'
+                }}
+              >
+                Modifier Mot de passe
+              </button>
+              <button 
+                onClick={() => setActiveTab('role')} 
+                style={{
+                  padding: '10px 15px',
+                  backgroundColor: activeTab === 'role' ? '#3498db' : '#f1f1f1',
+                  color: activeTab === 'role' ? 'white' : '#333',
+                  border: 'none',
+                  borderTopLeftRadius: '5px',
+                  borderTopRightRadius: '5px',
+                  cursor: 'pointer'
+                }}
+              >
+                Modifier Rôle
+              </button>
+            </div>
+            
+            {/* Formulaire de modification d'email */}
+            {activeTab === 'email' && (
+              <form onSubmit={handleUpdateEmail}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nouvel email:</label>
+                  <input 
+                    type="email" 
+                    name="email" 
+                    value={editingUser.email} 
+                    onChange={handleEditInputChange} 
+                    style={styles.input}
+                    required
+                  />
+                </div>
+                <button type="submit" style={styles.submitButton}>Mettre à jour l'email</button>
+              </form>
+            )}
+            
+            {/* Formulaire de modification de mot de passe */}
+            {activeTab === 'password' && (
+              <form onSubmit={handleUpdatePassword}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nouveau mot de passe:</label>
+                  <input 
+                    type="password" 
+                    name="password" 
+                    value={editingUser.password} 
+                    onChange={handleEditInputChange} 
+                    style={styles.input}
+                    required
+                  />
+                </div>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Confirmer le nouveau mot de passe:</label>
+                  <input 
+                    type="password" 
+                    name="password_confirm" 
+                    value={editingUser.password_confirm} 
+                    onChange={handleEditInputChange} 
+                    style={styles.input}
+                    required
+                  />
+                </div>
+                <button type="submit" style={styles.submitButton}>Mettre à jour le mot de passe</button>
+              </form>
+            )}
+            
+            {/* Formulaire de modification de rôle */}
+            {activeTab === 'role' && (
+              <form onSubmit={handleUpdateRole}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Nouveau rôle:</label>
+                  <select 
+                    name="role" 
+                    value={editingUser.role} 
+                    onChange={handleEditInputChange}
+                    style={styles.select}
+                    required
+                  >
+                    {ROLES.map(role => (
+                      <option key={role} value={role}>{role.replace('_', ' ')}</option>
+                    ))}
+                  </select>
+                </div>
+                <button type="submit" style={styles.submitButton}>Mettre à jour le rôle</button>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -526,7 +822,7 @@ const UserManagement = () => {
                         ✏️ Modifier
                       </button>
                       <button 
-                        onClick={() => handleDeleteUser(user.id)} 
+                        onClick={() => handleDeleteUser(user)} 
                         style={styles.deleteButton}
                         title="Supprimer"
                       >

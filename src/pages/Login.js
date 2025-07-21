@@ -17,7 +17,14 @@ const Login = () => {
 
     try {
       await login(username, password);
-      navigate('/');
+      
+      // Récupérer l'utilisateur et rediriger en fonction du rôle
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (user && user.role === 'livreur') {
+        navigate('/livraisons-attente');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Identifiants incorrects');
     } finally {

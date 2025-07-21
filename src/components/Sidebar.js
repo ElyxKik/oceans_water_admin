@@ -9,13 +9,19 @@ const allLinks = [
   { 
     path: "/", 
     label: "🏠 Tableau de bord",
-    // Accessible à tous les utilisateurs authentifiés
+    // Accessible à tous les utilisateurs authentifiés sauf les livreurs
     requiredPermission: null,
-    requiredRole: null
+    requiredRole: (role) => role !== ROLES.LIVREUR
   },
   {
     path: "/profil",
     label: "👤 Profil",
+    requiredPermission: null,
+    requiredRole: null
+  },
+  {
+    path: "/notifications",
+    label: "🔔 Notifications",
     requiredPermission: null,
     requiredRole: null
   },
@@ -59,14 +65,14 @@ const allLinks = [
     requiredPermission: null
   },
   { 
-    path: "/livraisons-attente", 
-    label: "📋 Livraisons en attente",
-    requiredRole: ROLES.LIVREUR,
+    path: "/livraisons", 
+    label: "🚚 Gestion des livraisons",
+    requiredRole: [ROLES.ADMINISTRATEUR, ROLES.FONDATEUR],
     requiredPermission: null
   },
   { 
     path: "/mes-livraisons", 
-    label: "🚚 Mes livraisons",
+    label: "📋 Mes Livraisons",
     requiredRole: ROLES.LIVREUR,
     requiredPermission: null
   },
@@ -93,7 +99,7 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
   // Filtrer les liens en fonction des permissions de l'utilisateur
   const links = allLinks.filter(link => {
     // Cas spécial pour les liens réservés uniquement aux livreurs
-    if ((link.path === "/livraisons-attente" || link.path === "/mes-livraisons") && userRole !== ROLES.LIVREUR) {
+    if (link.path === "/mes-livraisons" && userRole !== ROLES.LIVREUR) {
       return false;
     }
     
@@ -104,7 +110,16 @@ export default function Sidebar({ isMobileOpen, setIsMobileOpen }) {
     if (link.requiredPermission && hasPermission(link.requiredPermission)) return true;
     
     // Vérifier si l'utilisateur a le rôle requis
-    if (link.requiredRole && hasRole(link.requiredRole)) return true;
+    if (link.requiredRole) {
+      if (typeof link.requiredRole === 'function') {
+        if (link.requiredRole(userRole)) return true;
+      } else if (Array.isArray(link.requiredRole)) {
+        if (link.requiredRole.includes(userRole)) return true;
+      } else if (hasRole(link.requiredRole)) {
+        return true;
+      }
+      return false;
+    }
     
     return false;
   });

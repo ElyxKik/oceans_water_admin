@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import orderService from '../services/orderService';
 import clientService from '../services/clientService';
 import productService from '../services/productService';
+import userService from '../services/userService';
 
 // Helpers - déplacés au niveau supérieur
 const formatPrice = price => {
@@ -342,22 +343,14 @@ const OrdersNew = () => {
     // Charger les livreurs disponibles
     setLoadingDeliveryUsers(true);
     try {
-      // Simuler le chargement des livreurs (à remplacer par un appel API réel)
-      const response = await fetch('/api/users?role=livreur');
-      if (response.ok) {
-        const data = await response.json();
-        setDeliveryUsers(data.results || data || []);
-      } else {
-        throw new Error('Erreur lors du chargement des livreurs');
-      }
+      // Récupérer les livreurs depuis l'API
+      const response = await userService.getDeliveryUsers();
+      const data = response.data;
+      setDeliveryUsers(data.results || data || []);
     } catch (err) {
       console.error('Erreur lors du chargement des livreurs:', err);
-      // Données de test en cas d'erreur
-      setDeliveryUsers([
-        { id: 1, name: 'Jean Dupont', phone: '+243 123456789' },
-        { id: 2, name: 'Marie Dubois', phone: '+243 987654321' },
-        { id: 3, name: 'Pierre Martin', phone: '+243 456789123' },
-      ]);
+      setDeliveryUsers([]);
+      alert('Impossible de charger la liste des livreurs. Veuillez réessayer.');
     } finally {
       setLoadingDeliveryUsers(false);
     }
@@ -381,11 +374,8 @@ const OrdersNew = () => {
     
     setLoading(true);
     try {
-      // Simuler l'assignation (à remplacer par un appel API réel)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Dans un cas réel, on ferait un appel API ici
-      // await orderService.assignDelivery(selectedOrder.id, selectedDeliveryUser);
+      // Appel API pour assigner un livreur à la commande
+      await orderService.assignDelivery(selectedOrder.id, selectedDeliveryUser);
       
       // Rafraîchir la liste des commandes
       fetchOrders();
@@ -1106,7 +1096,7 @@ const OrdersNew = () => {
                   <option value="">-- Sélectionner un livreur --</option>
                   {deliveryUsers.map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.name || u.full_name || u.username}
+                      {u.full_name || u.username || u.email}
                     </option>
                   ))}
                 </select>
